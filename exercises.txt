@@ -1,0 +1,14 @@
+Document Again 9
+Easy 1 10
+Easy 2 10
+Easy 3 10
+Easy 4 10
+Easy 5 11
+Easy 6 10
+Easy 7 10
+Easy 8 10
+Easy 9 11
+Medium 1 10
+Medium 2 10
+Advanced 1 9
+Debugging 11
