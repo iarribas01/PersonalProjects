@@ -22,18 +22,21 @@ The bets are settled according to the results
 Game continues till the player decides to leave or goes bankrupt
 
 Options -
-You can have a fixed wallet amount for a player to start with or have them enter a custom amount
-The bet can have a minimum and might be forced in round numbers or multiples of 5
++ You can have a fixed wallet amount for a player to start with or have them enter a custom amount
++ The bet can have a minimum and might be forced in round numbers or multiples of 5
 Pauses can be introduced between the gameplay to simulate the rolling of a dice
 
 add a new window that opens and make more user friendly
 
+rubocop the final product
 =end
 # language problem: distinguish between choosing money to bet and placing bet on outcome
 
 class Player
-  def initialize(initial_wallet_amount)
-    @wallet = initial_wallet_amount
+  INITIAL_WALLET_AMOUNT = 100.00
+
+  def initialize
+    @wallet = INITIAL_WALLET_AMOUNT
     @bet = nil
     @guess = nil
   end
@@ -42,9 +45,9 @@ class Player
     choice = nil
     loop do
       puts "Now place your guess:"
-      puts "1. \t 7 up(8, 9, 10, 11, 12)"
-      puts "2. \t 7 down(2, 3, 4, 5, 6)"
-      puts "3. \t 7"
+      puts "1. 7 up(8, 9, 10, 11, 12)"
+      puts "2. 7 down(2, 3, 4, 5, 6)"
+      puts "3. 7"
       choice = gets.chomp.to_i
       break if valid_guess?(choice)
       puts "Sorry, you must enter 1, 2, or 3."
@@ -56,7 +59,6 @@ class Player
   def valid_guess?(guess)
     (1..3).include?(guess)
   end
-
 
   # choose the amount of money that the player wants to bet
   def place_bet
@@ -70,8 +72,10 @@ class Player
       
       if choice > wallet
         puts "Sorry, you don't have enough money to bet that much."
-      elsif choice <= 0
-        puts "Sorry, you must bet a positive number."
+      elsif choice < SevenUpSevenDownGame::MINIMUM_BET_AMOUNT
+        puts format("Sorry, you must bet more than $%.2f", SevenUpSevenDownGame::MINIMUM_BET_AMOUNT)
+      elsif ((choice % 5) != 0)
+        puts "Sorry, you can only bet on multiples of 5."
       else
         puts "error....."
       end
@@ -81,52 +85,73 @@ class Player
     nil
   end
 
-  # check if bet 
-  def valid_bet?(bet)
-    bet < wallet && bet > 0
+  # check if player can afford bet and bet is positive
+  def valid_bet?(choice)
+    choice <= wallet && choice >= SevenUpSevenDownGame::MINIMUM_BET_AMOUNT && choice % 5 == 0
+  end
+
+  def receive_payout(multiplier: 1)
+    self.wallet += bet * multiplier
+  end
+
+  def guessed_seven_up?
+    guess == 1
+  end
+
+  def guessed_seven_down?
+    guess == 2
+  end
+
+  def guessed_seven?
+    guess == 3
   end
 
   def bankrupt?
 
   end
 
-  def settle_bet(outcome)
-    if win?(outcome) && (guess == 2) # if player guessed 7 and correct
-      self.wallet += (bet*5)
-      puts "You won!"
-    elsif win?(outcome) # if player guessed correct but not 7
-      self.wallet += (bet*2)
-      puts "You won!"
-    else
-      puts "You lost..."
-    end
-  end
-
-  def win?(outcome)
-    (guess == 1 && outcome > 7) || # player bet 7 up and answer was above 7
-    (guess == 2 && outcome < 7) || # player bet 7 down and answer was below 7
-    (guess == 3 && outcome == 7) # player bet 7 and answer was 7
-  end
-
   def display_wallet
     puts format("(Wallet: $%.2f)", wallet)
   end
+  attr_accessor :bet
 
   private
 
-  attr_accessor :bet, :guess, :wallet
+  attr_accessor :guess, :wallet
 end
 
-
 class SevenUpSevenDownGame
-  INITIAL_WALLET_AMOUNT = 100.00 # determines how much money the player starts with
+  MINIMUM_BET_AMOUNT = 5.0
 
   def initialize
-    @player = Player.new(INITIAL_WALLET_AMOUNT)
+    @player = Player.new
+    @outcome = nil
+  end
+
+  def play
+    display_welcome_message
+    run_main_game
+    display_ending_message
+  end
+
+  def run_main_game
+    loop do
+      player.place_bet
+      player.place_guess
+      roll_dice!
+      settle_bet
+      break unless play_again?
+    end
+  end
+
+  def pause_and_clear_screen
+    sleep(2)
+    system 'clear'
   end
 
   def display_welcome_message
     puts "Welcome to Seven Up Seven Down!"
+    pause_and_clear_screen
   end
 
   def display_ending_message
@@ -134,29 +159,50 @@ class SevenUpSevenDownGame
     puts player.display_wallet
   end
 
-  def play
-    display_welcome_message
-    player.place_bet
-    player.place_guess
-    player.settle_bet(roll_dice)
-    display_ending_message
+  def roll_dice!
+    self.outcome = rand(2..12)
+    puts "The dice was rolled! The outcome is #{outcome}!"
+    pause_and_clear_screen
   end
 
-  def roll_dice
-    rand(2..12)
+  def play_again?
+    choice = nil
+    loop do
+      puts "Would you like to play again? (y or n)"
+      choice = gets.chomp
+      break if (choice == 'y' || choice == 'n')
+      puts "Invalid choice. Must input either y or n."
+    end
+    choice == 'y'
   end
 
-
-  def settle_bet(player, outcome)
-
+  def settle_bet
+    if win?
+      puts "You won!"
+      puts format("You received your $%.2f bet back.", player.bet)
+      if player.guessed_seven?
+        player.receive_payout(multiplier: 5)
+        puts format("You also earned $%.2f profit", (player.bet * 5))
+      else
+        player.receive_payout(multiplier: 2)
+        puts format("You also earned $%.2f profit", (player.bet * 5))
+      end
+    else
+      puts format("You lost... You are down $%.2f.", player.bet)
+    end
+    player.display_wallet
+    pause_and_clear_screen
   end
 
-  def calc_payout
-
+  def win?
+    (player.guessed_seven_up? && outcome > 7) || # player bet 7 up and answer was above 7
+    (player.guessed_seven_down? && outcome < 7) || # player bet 7 down and answer was below 7
+    (player.guessed_seven? && outcome == 7) # player bet 7 and answer was 7
   end
 
   private
   attr_reader :player
+  attr_accessor :outcome
 end
 
 SevenUpSevenDownGame.new.play
